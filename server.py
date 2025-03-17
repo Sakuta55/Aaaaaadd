@@ -7,7 +7,7 @@ app = Flask(__name__)
 rooms = {}
 
 # الحد الأقصى للاعبين في كل غرفة
-MAX_PLAYERS = 6
+MAX_PLAYERS = 2
 
 @app.route("/")
 def home():
