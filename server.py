@@ -43,5 +43,10 @@ def finish_race():
     
     return jsonify({"error": "الغرفة غير موجودة!"}), 400
 
+@app.route("/rooms", methods=["GET"])
+def get_rooms():
+    """إرجاع قائمة الغرف الحالية"""
+    return jsonify({"active_rooms": rooms})
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)
