@@ -3,20 +3,17 @@ import uuid  # لإنشاء معرفات فريدة للغرف
 
 app = Flask(__name__)
 
-# قائمة لتخزين الغرف
+# قائمة تخزين الغرف
 rooms = {}
 
-# قائمة لتخزين مواقع اللاعبين في كل غرفة
-player_positions = {}
+# الحد الأقصى للاعبين في الغرفة (تم تغييره إلى 2)
+MAX_PLAYERS = 2
 
-# عدد اللاعبين في كل غرفة (تم التعديل ليكون 2 فقط)
-MAX_PLAYERS = 2  
-
-# مواقع البداية الثابتة للسيارات (مثال لمكانين فقط)
-START_POSITIONS = [
-    {"x": 0, "y": 0, "rotation": 0},  # الموقع الأول
-    {"x": 5, "y": 0, "rotation": 0}   # الموقع الثاني
-]
+# نقاط البداية لكل لاعب
+START_POSITIONS = {
+    0: "Marker3D1",  
+    1: "Marker3D2"
+}
 
 @app.route("/")
 def home():
@@ -25,62 +22,43 @@ def home():
 @app.route("/join", methods=["POST"])
 def join_game():
     """يبحث عن غرفة متاحة أو ينشئ غرفة جديدة وينضم إليها اللاعب"""
-    player_id = request.json.get("player_id", str(uuid.uuid4()))
-
+    player_id = request.json.get("player_id", str(uuid.uuid4()))  # إنشاء player_id إذا لم يكن موجودًا
+    
     # البحث عن غرفة غير ممتلئة
     for room_id, players in rooms.items():
         if len(players) < MAX_PLAYERS:
             players.append(player_id)
+            start_position = START_POSITIONS[len(players) - 1]  # تحديد نقطة البداية
+            
             # إذا اكتملت الغرفة، يبدأ السباق
             if len(players) == MAX_PLAYERS:
-                # توزيع اللاعبين على مواقع البداية
-                player_positions[room_id] = {
-                    players[0]: START_POSITIONS[0],
-                    players[1]: START_POSITIONS[1]
-                }
                 return jsonify({
                     "room_id": room_id,
                     "players": players,
-                    "positions": player_positions[room_id],
                     "status": "full",
+                    "start_positions": {players[i]: START_POSITIONS[i] for i in range(len(players))},
                     "message": "🚦 السباق بدأ!"
                 })
-            return jsonify({"room_id": room_id, "players": players, "status": "waiting", "message": "👥 في انتظار لاعب آخر..."})
-
+            
+            return jsonify({
+                "room_id": room_id,
+                "players": players,
+                "status": "waiting",
+                "start_position": start_position,
+                "message": "👥 في انتظار اللاعب الآخر..."
+            })
+    
     # إذا لم تكن هناك غرفة متاحة، يتم إنشاء غرفة جديدة
     new_room_id = str(uuid.uuid4())
     rooms[new_room_id] = [player_id]
     
-    return jsonify({"room_id": new_room_id, "players": rooms[new_room_id], "status": "waiting", "message": "🆕 تم إنشاء غرفة جديدة!"})
-
-@app.route("/update_position", methods=["POST"])
-def update_position():
-    """تحديث موقع اللاعب وإرساله لباقي اللاعبين"""
-    data = request.json
-    room_id = data.get("room_id")
-    player_id = data.get("player_id")
-    position = data.get("position")  # مثال: {"x": 100, "y": 200, "rotation": 45}
-
-    if room_id not in rooms or player_id not in rooms[room_id]:
-        return jsonify({"error": "الغرفة غير موجودة أو اللاعب غير موجود!"}), 400
-
-    # حفظ موقع اللاعب
-    if room_id not in player_positions:
-        player_positions[room_id] = {}
-
-    player_positions[room_id][player_id] = position
-
-    return jsonify({"message": "تم تحديث موقع اللاعب!"})
-
-@app.route("/get_positions", methods=["GET"])
-def get_positions():
-    """إرسال مواقع جميع اللاعبين في الغرفة"""
-    room_id = request.args.get("room_id")
-
-    if room_id not in player_positions:
-        return jsonify({"error": "الغرفة غير موجودة أو لا تحتوي على لاعبين!"}), 400
-
-    return jsonify({"positions": player_positions[room_id]})
+    return jsonify({
+        "room_id": new_room_id,
+        "players": rooms[new_room_id],
+        "status": "waiting",
+        "start_position": "Marker3D1",
+        "message": "🆕 تم إنشاء غرفة جديدة!"
+    })
 
 @app.route("/finish", methods=["POST"])
 def finish_race():
@@ -88,9 +66,11 @@ def finish_race():
     room_id = request.json.get("room_id")
     if room_id in rooms:
         del rooms[room_id]  # حذف الغرفة
-        if room_id in player_positions:
-            del player_positions[room_id]  # حذف بيانات اللاعبين
-        return jsonify({"room_id": room_id, "status": "deleted", "message": "🏁 تم حذف الغرفة بعد انتهاء السباق."})
+        return jsonify({
+            "room_id": room_id,
+            "status": "deleted",
+            "message": "🏁 تم حذف الغرفة بعد انتهاء السباق."
+        })
     
     return jsonify({"error": "الغرفة غير موجودة!"}), 400
 
