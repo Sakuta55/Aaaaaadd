@@ -1,39 +1,39 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request
 from flask_socketio import SocketIO, emit, join_room, leave_room
-import uuid
 
 app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*")  # دعم WebSockets
-
-rooms = {}
-MAX_PLAYERS = 2
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 @app.route("/")
-def home():
-    return jsonify({"message": "✅ السيرفر يعمل بنجاح عبر WebSockets على Koyeb!"})
+def index():
+    return "Server is running!"
+
+@socketio.on("connect")
+def handle_connect():
+    print("Client connected")
+    emit("message", {"data": "Connected to server"})
+
+@socketio.on("disconnect")
+def handle_disconnect():
+    print("Client disconnected")
 
 @socketio.on("join")
 def handle_join(data):
-    player_id = data.get("player_id", str(uuid.uuid4()))
-    
-    for room_id, players in rooms.items():
-        if len(players) < MAX_PLAYERS:
-            players.append(player_id)
-            join_room(room_id)
-            emit("player_joined", {"room_id": room_id, "players": players}, room=room_id)
-            return
-    
-    new_room_id = str(uuid.uuid4())
-    rooms[new_room_id] = [player_id]
-    join_room(new_room_id)
-    emit("new_room", {"room_id": new_room_id, "players": [player_id]}, room=new_room_id)
+    room = data["room"]
+    join_room(room)
+    emit("message", {"data": f"Joined room {room}"}, room=room)
 
-@socketio.on("finish")
-def handle_finish(data):
-    room_id = data.get("room_id")
-    if room_id in rooms:
-        del rooms[room_id]
-        emit("room_deleted", {"room_id": room_id}, broadcast=True)
+@socketio.on("leave")
+def handle_leave(data):
+    room = data["room"]
+    leave_room(room)
+    emit("message", {"data": f"Left room {room}"}, room=room)
+
+@socketio.on("message")
+def handle_message(data):
+    room = data["room"]
+    message = data["message"]
+    emit("message", {"data": message}, room=room)
 
 if __name__ == "__main__":
-    socketio.run(app, host="0.0.0.0", port=8000)
+    socketio.run(app, host="0.0.0.0", port=8000, allow_unsafe_werkzeug=True)
